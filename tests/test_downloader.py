@@ -55,6 +55,29 @@ class TestDownloader(unittest.TestCase):
         self.assertIn(TaskStatus.COMPLETED, updated_tasks)
         self.assertTrue(len(summary_events) > 0)
 
+    def test_real_transfer_manager_download_call(self) -> None:
+        from unittest.mock import MagicMock
+        downloader = BulkDownloader(is_mock=False)
+        mock_tm = MagicMock()
+        mock_future = MagicMock()
+        mock_tm.download.return_value = mock_future
+        downloader._transfer_manager = mock_tm
+
+        task = downloader.enqueue_file(
+            bucket="prod-bucket",
+            key="data/report.parquet",
+            size=1024,
+            destination_dir=self.temp_dir,
+        )
+        downloader._run_queue()
+
+        mock_tm.download.assert_called_once()
+        kwargs = mock_tm.download.call_args.kwargs
+        self.assertEqual(kwargs["bucket"], "prod-bucket")
+        self.assertEqual(kwargs["key"], "data/report.parquet")
+        self.assertEqual(kwargs["fileobj"], str(self.temp_dir / "report.parquet"))
+
 
 if __name__ == "__main__":
     unittest.main()
+

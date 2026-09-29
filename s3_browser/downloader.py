@@ -246,7 +246,7 @@ class BulkDownloader:
             future = self._transfer_manager.download(
                 bucket=task.bucket,
                 key=task.key,
-                filename=str(task.local_path),
+                fileobj=str(task.local_path),
                 subscribers=[callback] if callback else None,
             )
             futures.append((future, task))
