@@ -45,9 +45,8 @@ def main() -> None:
     app.setApplicationName("S3 Browser")
     app.setOrganizationName("S3BrowserProject")
 
-    # Clean macOS / Cross-platform modern look
-    if sys.platform != "darwin":
-        app.setStyle("Fusion")
+    # Clean cross-platform modern look (Fusion prevents macOS QStyle layout bugs)
+    app.setStyle("Fusion")
 
     # Windows taskbar grouping & icon fix
     if sys.platform == "win32":
@@ -79,7 +78,10 @@ def main() -> None:
 
     # Font setup
     font = app.font()
-    font.setPointSize(10)
+    if sys.platform == "darwin":
+        font.setPointSize(12)
+    else:
+        font.setPointSize(10)
     app.setFont(font)
 
     config_manager = ConfigManager()

@@ -200,7 +200,26 @@ class TestUI(unittest.TestCase):
 
         dlg.close()
 
+    def test_profile_manager_dialog_layout(self) -> None:
+        from PySide6.QtWidgets import QFormLayout, QSizePolicy
+        from s3_browser.ui.dialogs.profile_dialog import ProfileManagerDialog
+
+        dlg = ProfileManagerDialog(config_manager=self.config_manager)
+        dlg.show()
+
+        self.assertGreaterEqual(dlg.minimumWidth(), 700)
+        self.assertEqual(
+            dlg.edit_start_url.sizePolicy().horizontalPolicy(),
+            QSizePolicy.Policy.Expanding,
+        )
+        self.assertEqual(
+            dlg.edit_name.sizePolicy().horizontalPolicy(),
+            QSizePolicy.Policy.Expanding,
+        )
+        dlg.close()
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

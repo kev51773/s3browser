@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -42,7 +43,8 @@ class ProfileManagerDialog(QDialog):
     def __init__(self, config_manager: ConfigManager, parent: Any = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("AWS SSO Profiles Manager")
-        self.resize(750, 480)
+        self.setMinimumSize(780, 500)
+        self.resize(840, 540)
         self.config_manager = config_manager
 
         self._init_ui()
@@ -56,8 +58,10 @@ class ProfileManagerDialog(QDialog):
 
         # Left side: Profiles list & buttons
         left_widget = QWidget()
+        left_widget.setMinimumWidth(220)
         left_layout = QVBoxLayout(left_widget)
         left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(6)
 
         left_label = QLabel("<b>Configured Profiles:</b>")
         self.profile_list = QListWidget()
@@ -77,11 +81,20 @@ class ProfileManagerDialog(QDialog):
 
         # Right side: Edit form
         right_widget = QWidget()
+        right_widget.setMinimumWidth(460)
         right_layout = QVBoxLayout(right_widget)
         right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(10)
 
         form_group = QGroupBox("SSO Profile Settings")
         form_layout = QFormLayout(form_group)
+        form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        form_layout.setHorizontalSpacing(14)
+        form_layout.setVerticalSpacing(12)
+        form_layout.setContentsMargins(16, 20, 16, 16)
 
         self.edit_name = QLineEdit()
         self.edit_start_url = QLineEdit()
@@ -99,6 +112,18 @@ class ProfileManagerDialog(QDialog):
         self.edit_default_region = QLineEdit()
         self.edit_default_region.setPlaceholderText("us-east-1")
 
+        for edit in (
+            self.edit_name,
+            self.edit_start_url,
+            self.edit_sso_region,
+            self.edit_account_id,
+            self.edit_role_name,
+            self.edit_default_region,
+        ):
+            edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            edit.setMinimumHeight(28)
+            edit.setMinimumWidth(260)
+
         form_layout.addRow("Profile Name:", self.edit_name)
         form_layout.addRow("SSO Start URL *:", self.edit_start_url)
         form_layout.addRow("SSO Region *:", self.edit_sso_region)
@@ -115,7 +140,7 @@ class ProfileManagerDialog(QDialog):
         self.btn_test_login = QPushButton(qta.icon("fa5s.key"), "Login / Test SSO")
         self.btn_test_login.clicked.connect(self._test_sso_login)
         self.btn_save = QPushButton(qta.icon("fa5s.save"), "Save Profile")
-        self.btn_save.setStyleSheet("font-weight: bold;")
+        self.btn_save.setStyleSheet("font-weight: bold; padding: 4px 14px;")
         self.btn_save.clicked.connect(self._save_profile)
 
         action_box.addWidget(self.btn_test_login)
@@ -129,8 +154,10 @@ class ProfileManagerDialog(QDialog):
 
         splitter.addWidget(left_widget)
         splitter.addWidget(right_widget)
+        splitter.setChildrenCollapsible(False)
         splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
+        splitter.setStretchFactor(1, 3)
+        splitter.setSizes([240, 580])
 
         main_layout.addWidget(splitter)
 

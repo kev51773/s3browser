@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -57,11 +58,21 @@ class AddBookmarkDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Add S3 Bookmark")
-        self.resize(460, 240)
+        self.setMinimumSize(520, 260)
+        self.resize(560, 280)
         self.config_manager = config_manager
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.DontWrapRows)
+        form.setHorizontalSpacing(14)
+        form.setVerticalSpacing(10)
 
         # Extract a friendly default name from path
         default_name = current_path.rstrip("/").split("/")[-1] or "Root"
@@ -94,6 +105,10 @@ class AddBookmarkDialog(QDialog):
         for b in self.config_manager.bookmarks:
             if isinstance(b, BookmarkFolder):
                 self.combo_folder.addItem(b.name)
+
+        for w in (self.edit_name, self.edit_path, self.combo_profile, self.combo_folder):
+            w.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            w.setMinimumHeight(28)
 
         form.addRow("Bookmark Name:", self.edit_name)
         form.addRow("S3 Path:", self.edit_path)
@@ -131,7 +146,8 @@ class OrganizeBookmarksDialog(QDialog):
     def __init__(self, config_manager: ConfigManager, parent: Any = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Organize Bookmarks")
-        self.resize(600, 420)
+        self.setMinimumSize(680, 460)
+        self.resize(760, 500)
         self.config_manager = config_manager
 
         self._folder_icon = qta.icon("fa5s.folder", color="#3498db")
@@ -145,9 +161,10 @@ class OrganizeBookmarksDialog(QDialog):
 
         self.tree = BookmarkTreeWidget()
         self.tree.setHeaderLabels(["Bookmark / Folder", "Profile", "S3 Path"])
-        self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         self.tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.tree.header().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.tree.header().resizeSection(0, 260)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
         self.tree.item_dropped.connect(self._rebuild_from_tree)

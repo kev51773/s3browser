@@ -106,12 +106,13 @@ class MainWindow(QMainWindow):
         root_layout.setContentsMargins(6, 6, 6, 6)
         root_layout.setSpacing(6)
 
-        # 1. Top Bar: Profile selector, Address bar, Filter
-        top_bar = QHBoxLayout()
+        # 1. Top Session Bar: Profile selector, Demo mode, and Action buttons
+        session_bar = QHBoxLayout()
+        session_bar.setSpacing(8)
 
         lbl_profile = QLabel("Profile:")
         self.combo_profiles = QComboBox()
-        self.combo_profiles.setMinimumWidth(160)
+        self.combo_profiles.setMinimumWidth(180)
         self.combo_profiles.currentIndexChanged.connect(self._on_profile_combo_changed)
 
         self.btn_manage_profiles = QPushButton(qta.icon("fa5s.user-cog"), "Profiles...")
@@ -122,22 +123,35 @@ class MainWindow(QMainWindow):
         self.chk_demo.setVisible(self.allow_demo)
         self.chk_demo.toggled.connect(self._on_demo_toggled)
 
-        top_bar.addWidget(lbl_profile)
-        top_bar.addWidget(self.combo_profiles)
-        top_bar.addWidget(self.btn_manage_profiles)
+        session_bar.addWidget(lbl_profile)
+        session_bar.addWidget(self.combo_profiles)
+        session_bar.addWidget(self.btn_manage_profiles)
         if self.allow_demo:
-            top_bar.addWidget(self.chk_demo)
-        top_bar.addSpacing(15)
+            session_bar.addWidget(self.chk_demo)
+        session_bar.addStretch()
 
-        # Address Navigation
+        self.btn_download_selected = QPushButton(qta.icon("fa5s.download", color="#27ae60"), "Download (Cmd+D)")
+        self.btn_download_selected.setStyleSheet("font-weight: bold; padding: 4px 14px;")
+        self.btn_download_selected.clicked.connect(self._download_selected_rows)
+        session_bar.addWidget(self.btn_download_selected)
+
+        root_layout.addLayout(session_bar)
+
+        # 2. Navigation / Location Bar: Up, Refresh, Path address, and Filter
+        nav_bar = QHBoxLayout()
+        nav_bar.setSpacing(6)
+
         self.btn_up = QPushButton(qta.icon("fa5s.arrow-up"), "")
         self.btn_up.setToolTip("Up to parent folder (Backspace / Cmd+Up)")
+        self.btn_up.setFixedWidth(34)
         self.btn_up.clicked.connect(self._navigate_up)
 
         self.btn_refresh = QPushButton(qta.icon("fa5s.sync-alt"), "")
         self.btn_refresh.setToolTip("Refresh (Cmd+R / Ctrl+R)")
+        self.btn_refresh.setFixedWidth(34)
         self.btn_refresh.clicked.connect(self._refresh_current_view)
 
+        lbl_path = QLabel("Path:")
         self.edit_address = QLineEdit()
         self.edit_address.setPlaceholderText("s3://bucket-name/folder/path/")
         self.edit_address.returnPressed.connect(self._on_address_entered)
@@ -145,43 +159,43 @@ class MainWindow(QMainWindow):
         # Quick client-side filter
         self.edit_filter = QLineEdit()
         self.edit_filter.setPlaceholderText("Filter files...")
-        self.edit_filter.setMaximumWidth(180)
+        self.edit_filter.setMinimumWidth(160)
+        self.edit_filter.setMaximumWidth(220)
         self.edit_filter.textChanged.connect(self.table_model.set_filter)
 
-        self.btn_download_selected = QPushButton(qta.icon("fa5s.download", color="#27ae60"), "Download (Cmd+D)")
-        self.btn_download_selected.setStyleSheet("font-weight: bold;")
-        self.btn_download_selected.clicked.connect(self._download_selected_rows)
+        nav_bar.addWidget(self.btn_up)
+        nav_bar.addWidget(self.btn_refresh)
+        nav_bar.addWidget(lbl_path)
+        nav_bar.addWidget(self.edit_address, stretch=1)
+        nav_bar.addWidget(self.edit_filter)
 
-        top_bar.addWidget(self.btn_up)
-        top_bar.addWidget(self.btn_refresh)
-        top_bar.addWidget(QLabel("Path:"))
-        top_bar.addWidget(self.edit_address, stretch=1)
-        top_bar.addWidget(self.edit_filter)
-        top_bar.addWidget(self.btn_download_selected)
+        root_layout.addLayout(nav_bar)
 
-        root_layout.addLayout(top_bar)
-
-        # 2. Main Dual Pane Splitter (Left: Tree, Right: Table)
+        # 3. Main Dual Pane Splitter (Left: Tree, Right: Table)
         self.h_splitter = QSplitter(Qt.Orientation.Horizontal)
 
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.tree_model)
         self.tree_view.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.tree_view.setMinimumWidth(200)
         self.tree_view.clicked.connect(self._on_tree_node_clicked)
         self.tree_view.expanded.connect(self._on_tree_node_expanded)
 
         self.table_view = S3TableView()
         self.table_view.setModel(self.table_model)
+        self.table_view.setMinimumWidth(400)
         self.table_view.folder_double_clicked.connect(self._on_folder_opened)
-        self.table_view.download_requested.connect(self._on_download_requested)
+        self.table_view.download_requested.connect(self._download_selected_rows)
         self.table_view.navigate_up_requested.connect(self._navigate_up)
 
         self.h_splitter.addWidget(self.tree_view)
         self.h_splitter.addWidget(self.table_view)
+        self.h_splitter.setChildrenCollapsible(False)
         self.h_splitter.setStretchFactor(0, 1)
         self.h_splitter.setStretchFactor(1, 3)
+        self.h_splitter.setSizes([260, 920])
 
-        # 3. Vertical Splitter (Top: Explorer, Bottom: Transfer Manager)
+        # 4. Vertical Splitter (Top: Explorer, Bottom: Transfer Manager)
         self.v_splitter = QSplitter(Qt.Orientation.Vertical)
         self.v_splitter.addWidget(self.h_splitter)
 
@@ -191,8 +205,10 @@ class MainWindow(QMainWindow):
         self.transfer_panel.destination_changed.connect(self._on_download_dir_changed)
         self.transfer_panel.cancel_requested.connect(self._cancel_all_downloads)
         self.v_splitter.addWidget(self.transfer_panel)
+        self.v_splitter.setChildrenCollapsible(False)
         self.v_splitter.setStretchFactor(0, 3)
         self.v_splitter.setStretchFactor(1, 1)
+        self.v_splitter.setSizes([540, 180])
 
         root_layout.addWidget(self.v_splitter)
 
