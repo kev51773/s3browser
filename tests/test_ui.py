@@ -218,8 +218,55 @@ class TestUI(unittest.TestCase):
         )
         dlg.close()
 
+    def test_bucket_filter_and_file_filter_clearing(self) -> None:
+        import time
+        from PySide6.QtCore import QModelIndex
+
+        window = MainWindow(config_manager=self.config_manager, allow_demo=True)
+        window.show()
+
+        start = time.time()
+        while time.time() - start < 2.0 and window.tree_model.rowCount() == 0:
+            QApplication.processEvents()
+            time.sleep(0.05)
+
+        self.assertGreater(window.tree_model.rowCount(), 0)
+
+        # 1. Test Bucket Filter
+        window.edit_bucket_filter.setText("media")
+        # Find indices of media-archive and prod-analytics-data
+        media_row = -1
+        prod_row = -1
+        for r in range(window.tree_model.rowCount()):
+            text = window.tree_model.item(r).text()
+            if text == "media-archive":
+                media_row = r
+            elif text == "prod-analytics-data":
+                prod_row = r
+
+        self.assertNotEqual(media_row, -1)
+        self.assertNotEqual(prod_row, -1)
+        self.assertFalse(window.tree_view.isRowHidden(media_row, QModelIndex()))
+        self.assertTrue(window.tree_view.isRowHidden(prod_row, QModelIndex()))
+
+        # Clear bucket filter
+        window.edit_bucket_filter.clear()
+        self.assertFalse(window.tree_view.isRowHidden(media_row, QModelIndex()))
+        self.assertFalse(window.tree_view.isRowHidden(prod_row, QModelIndex()))
+
+        # 2. Test File Filter Auto-Clearing on Folder Navigation
+        window.edit_filter.setText("some_search_term")
+        self.assertEqual(window.edit_filter.text(), "some_search_term")
+
+        # Navigate to a new folder
+        window.navigate_to("prod-analytics-data", "raw_events/")
+        self.assertEqual(window.edit_filter.text(), "", "File filter should clear when moving to a new folder")
+
+        window.close()
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

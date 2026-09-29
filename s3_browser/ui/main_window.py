@@ -159,6 +159,7 @@ class MainWindow(QMainWindow):
         # Quick client-side filter
         self.edit_filter = QLineEdit()
         self.edit_filter.setPlaceholderText("Filter files...")
+        self.edit_filter.setClearButtonEnabled(True)
         self.edit_filter.setMinimumWidth(160)
         self.edit_filter.setMaximumWidth(220)
         self.edit_filter.textChanged.connect(self.table_model.set_filter)
@@ -174,12 +175,26 @@ class MainWindow(QMainWindow):
         # 3. Main Dual Pane Splitter (Left: Tree, Right: Table)
         self.h_splitter = QSplitter(Qt.Orientation.Horizontal)
 
+        # Left pane: Filter bar + Tree View
+        left_pane = QWidget()
+        left_layout = QVBoxLayout(left_pane)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(4)
+
+        self.edit_bucket_filter = QLineEdit()
+        self.edit_bucket_filter.setPlaceholderText("Filter buckets...")
+        self.edit_bucket_filter.setClearButtonEnabled(True)
+        self.edit_bucket_filter.textChanged.connect(self._apply_bucket_filter)
+
         self.tree_view = QTreeView()
         self.tree_view.setModel(self.tree_model)
         self.tree_view.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.tree_view.setMinimumWidth(200)
         self.tree_view.clicked.connect(self._on_tree_node_clicked)
         self.tree_view.expanded.connect(self._on_tree_node_expanded)
+
+        left_layout.addWidget(self.edit_bucket_filter)
+        left_layout.addWidget(self.tree_view)
+        left_pane.setMinimumWidth(200)
 
         self.table_view = S3TableView()
         self.table_view.setModel(self.table_model)
@@ -188,7 +203,7 @@ class MainWindow(QMainWindow):
         self.table_view.download_requested.connect(self._download_selected_rows)
         self.table_view.navigate_up_requested.connect(self._navigate_up)
 
-        self.h_splitter.addWidget(self.tree_view)
+        self.h_splitter.addWidget(left_pane)
         self.h_splitter.addWidget(self.table_view)
         self.h_splitter.setChildrenCollapsible(False)
         self.h_splitter.setStretchFactor(0, 1)
@@ -222,7 +237,7 @@ class MainWindow(QMainWindow):
         self.table_view.selectionModel().selectionChanged.connect(self._update_selection_info)
 
     def _init_signals(self) -> None:
-        self.buckets_loaded.connect(self.tree_model.populate_buckets)
+        self.buckets_loaded.connect(self._handle_buckets_loaded)
         self.tree_subfolders_loaded.connect(self._handle_tree_subfolders_loaded)
         self.s3_data_loaded.connect(self._handle_s3_data_loaded)
         self.task_progress.connect(self.transfer_panel.update_task)
@@ -464,6 +479,8 @@ class MainWindow(QMainWindow):
         threading.Thread(target=fetch, daemon=True).start()
 
     def navigate_to(self, bucket: str, prefix: str) -> None:
+        if bucket != self.current_bucket or prefix != self.current_prefix:
+            self.edit_filter.clear()
         self.current_bucket = bucket
         self.current_prefix = prefix
         self.edit_address.setText(f"s3://{bucket}/{prefix}")
@@ -500,6 +517,7 @@ class MainWindow(QMainWindow):
 
         if not clean_p:
             # Root bucket selected
+            self.tree_view.setRowHidden(bucket_item.row(), QModelIndex(), False)
             self.tree_view.blockSignals(True)
             self.tree_view.setCurrentIndex(bucket_item.index())
             self.tree_view.scrollTo(bucket_item.index())
@@ -535,11 +553,15 @@ class MainWindow(QMainWindow):
 
         target = search_children(bucket_item)
         if target:
-            # Expand parent nodes so target is visible
+            # Expand and unhide parent nodes so target is visible
             p = target.parent()
             while p and p != self.tree_model.invisibleRootItem():
+                p_parent_idx = p.parent().index() if p.parent() else QModelIndex()
+                self.tree_view.setRowHidden(p.row(), p_parent_idx, False)
                 self.tree_view.expand(p.index())
                 p = p.parent()
+            target_parent_idx = target.parent().index() if target.parent() else QModelIndex()
+            self.tree_view.setRowHidden(target.row(), target_parent_idx, False)
             self.tree_view.blockSignals(True)
             self.tree_view.setCurrentIndex(target.index())
             self.tree_view.scrollTo(target.index())
@@ -548,6 +570,35 @@ class MainWindow(QMainWindow):
     def _handle_s3_data_loaded(self, folders: List[S3FolderItem], files: List[S3FileItem]) -> None:
         self.table_model.set_items(folders, files)
         self.status_message.emit(f"Loaded {len(folders)} folders, {len(files)} files in s3://{self.current_bucket}/{self.current_prefix}")
+
+    def _handle_buckets_loaded(self, buckets: List[S3BucketItem]) -> None:
+        self.tree_model.populate_buckets(buckets)
+        if self.edit_bucket_filter.text().strip():
+            self._apply_bucket_filter()
+
+    def _apply_bucket_filter(self) -> None:
+        query = self.edit_bucket_filter.text().strip().lower()
+
+        def filter_item(item: QStandardItem) -> bool:
+            matches_self = query in item.text().lower()
+            any_child_matches = False
+            for r in range(item.rowCount()):
+                child = item.child(r)
+                if child and child.text() != "Loading...":
+                    if filter_item(child):
+                        any_child_matches = True
+
+            should_show = (not query) or matches_self or any_child_matches
+            parent_idx = item.parent().index() if item.parent() else QModelIndex()
+            self.tree_view.setRowHidden(item.row(), parent_idx, not should_show)
+            if query and any_child_matches:
+                self.tree_view.expand(item.index())
+            return should_show
+
+        for r in range(self.tree_model.rowCount()):
+            item = self.tree_model.item(r)
+            if item:
+                filter_item(item)
 
     def _on_tree_node_expanded(self, index: QModelIndex) -> None:
         item = self.tree_model.itemFromIndex(index)
@@ -578,6 +629,8 @@ class MainWindow(QMainWindow):
         item = self.tree_model.itemFromIndex(p_idx)
         if item:
             self.tree_model.set_subfolders(item, bucket, folders)
+            if self.edit_bucket_filter.text().strip():
+                self._apply_bucket_filter()
             # Re-sync tree selection now that subfolders are loaded
             if self.current_bucket == bucket:
                 self._sync_tree_selection(self.current_bucket, self.current_prefix)
