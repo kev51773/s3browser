@@ -262,6 +262,69 @@ class TestUI(unittest.TestCase):
         window.navigate_to("prod-analytics-data", "raw_events/")
         self.assertEqual(window.edit_filter.text(), "", "File filter should clear when moving to a new folder")
 
+    def test_activate_bookmark_updates_both_tree_and_table(self) -> None:
+        import time
+        from s3_browser.config import BookmarkItem
+
+        window = MainWindow(config_manager=self.config_manager, allow_demo=True)
+        window.show()
+
+        start = time.time()
+        while time.time() - start < 2.0 and window.tree_model.rowCount() == 0:
+            QApplication.processEvents()
+            time.sleep(0.05)
+
+        # 1. Activate bookmark pointing to media-archive/assets/photos/
+        bm = BookmarkItem(name="photos", profile="Demo", path="s3://media-archive/assets/photos/")
+        window._activate_bookmark(bm)
+
+        start = time.time()
+        while time.time() - start < 3.0 and (window.table_model.rowCount() == 0 or window.tree_view.currentIndex().data(0) != "photos"):
+            QApplication.processEvents()
+            time.sleep(0.05)
+
+        self.assertEqual(window.current_bucket, "media-archive")
+        self.assertEqual(window.current_prefix, "assets/photos/")
+        # Right pane table updated
+        self.assertGreater(window.table_model.rowCount(), 0)
+        row_names = [r.name for r in window.table_model._filtered_rows]
+        self.assertIn("item_001.jpg", row_names)
+
+        # Left pane tree selection updated
+        self.assertTrue(window.tree_view.currentIndex().isValid())
+        selected_text = window.tree_view.currentIndex().data(0)
+        self.assertEqual(selected_text, "photos")
+
+        window.close()
+
+    def test_activate_bookmark_with_profile_switch(self) -> None:
+        import time
+        from s3_browser.config import BookmarkItem
+
+        window = MainWindow(config_manager=self.config_manager, allow_demo=False)
+        window.show()
+
+        start = time.time()
+        while time.time() - start < 1.0:
+            QApplication.processEvents()
+            time.sleep(0.05)
+
+        self.assertFalse(window.chk_demo.isChecked())
+
+        bm = BookmarkItem(name="photos", profile="Demo", path="s3://media-archive/assets/photos/")
+        window._activate_bookmark(bm)
+
+        start = time.time()
+        while time.time() - start < 3.0 and (window.table_model.rowCount() == 0 or window.tree_view.currentIndex().data(0) != "photos"):
+            QApplication.processEvents()
+            time.sleep(0.05)
+
+        self.assertTrue(window.chk_demo.isChecked())
+        self.assertEqual(window.current_bucket, "media-archive")
+        self.assertEqual(window.current_prefix, "assets/photos/")
+        self.assertGreater(window.table_model.rowCount(), 0)
+        self.assertEqual(window.tree_view.currentIndex().data(0), "photos")
+
         window.close()
 
 

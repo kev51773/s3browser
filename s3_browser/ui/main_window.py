@@ -7,7 +7,13 @@ import threading
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
-from PySide6.QtCore import QModelIndex, QPersistentModelIndex, Qt, Signal
+from PySide6.QtCore import (
+    QItemSelectionModel,
+    QModelIndex,
+    QPersistentModelIndex,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
@@ -82,6 +88,7 @@ class MainWindow(QMainWindow):
         self.current_bucket = ""
         self.current_prefix = ""
         self.current_profile_name = ""
+        self._pending_navigation: Optional[Tuple[str, str]] = None
 
         # S3 Client & Downloader
         self.s3_client: Any = None
@@ -338,25 +345,40 @@ class MainWindow(QMainWindow):
         """Switches profile and opens the target S3 path directly."""
         self.status_message.emit(f"Opening bookmark: {bm.name} -> {bm.path}")
 
-        # Switch profile if specified
-        if bm.profile.lower() == "demo":
-            if not self.chk_demo.isChecked():
-                self.chk_demo.setChecked(True)
-        elif bm.profile:
-            if self.chk_demo.isChecked():
-                self.chk_demo.setChecked(False)
-            idx = self.combo_profiles.findText(bm.profile)
-            if idx >= 0:
-                self.combo_profiles.setCurrentIndex(idx)
-
         # Parse S3 URI
         path = bm.path.strip()
         if path.startswith("s3://"):
             path = path[5:]
+        path = path.lstrip("/")
         parts = path.split("/", 1)
         bucket = parts[0]
         prefix = parts[1] if len(parts) > 1 else ""
-        self.navigate_to(bucket, prefix)
+        if prefix and not prefix.endswith("/"):
+            prefix += "/"
+
+        # Determine if profile switch is required
+        needs_switch = False
+        target_profile = (bm.profile or "").strip()
+
+        if target_profile.lower() == "demo":
+            if not self.chk_demo.isChecked():
+                needs_switch = True
+                self._pending_navigation = (bucket, prefix)
+                self.chk_demo.setChecked(True)
+        elif target_profile:
+            if self.chk_demo.isChecked():
+                needs_switch = True
+                self._pending_navigation = (bucket, prefix)
+                self.chk_demo.setChecked(False)
+            idx = self.combo_profiles.findText(target_profile)
+            if idx >= 0 and self.combo_profiles.currentIndex() != idx:
+                needs_switch = True
+                self._pending_navigation = (bucket, prefix)
+                self.combo_profiles.setCurrentIndex(idx)
+
+        if not needs_switch:
+            self._pending_navigation = None
+            self.navigate_to(bucket, prefix)
 
     def _open_add_bookmark_dialog(self) -> None:
         current_path = f"s3://{self.current_bucket}/{self.current_prefix}" if self.current_bucket else "s3://"
@@ -476,6 +498,8 @@ class MainWindow(QMainWindow):
         threading.Thread(target=fetch, daemon=True).start()
 
     def navigate_to(self, bucket: str, prefix: str) -> None:
+        if prefix and not prefix.endswith("/"):
+            prefix += "/"
         if bucket != self.current_bucket or prefix != self.current_prefix:
             self.edit_filter.clear()
         self.current_bucket = bucket
@@ -518,6 +542,11 @@ class MainWindow(QMainWindow):
             self.tree_view.blockSignals(True)
             self.tree_view.setCurrentIndex(bucket_item.index())
             self.tree_view.scrollTo(bucket_item.index())
+            if self.tree_view.selectionModel():
+                self.tree_view.selectionModel().select(
+                    bucket_item.index(),
+                    QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+                )
             self.tree_view.blockSignals(False)
             return
 
@@ -531,7 +560,7 @@ class MainWindow(QMainWindow):
         def search_children(parent_item: Any) -> Optional[Any]:
             for r in range(parent_item.rowCount()):
                 child = parent_item.child(r)
-                if not child:
+                if not child or child.text() == "Loading...":
                     continue
                 child_p = child.data(Qt.UserRole + 1) or ""
                 if child_p and not child_p.endswith("/"):
@@ -545,6 +574,7 @@ class MainWindow(QMainWindow):
                     if not child.data(Qt.UserRole + 3):
                         self._load_tree_subfolders_async(child, bucket, child_p)
                         self.tree_view.expand(child.index())
+                        return None
                     return search_children(child)
             return None
 
@@ -562,17 +592,32 @@ class MainWindow(QMainWindow):
             self.tree_view.blockSignals(True)
             self.tree_view.setCurrentIndex(target.index())
             self.tree_view.scrollTo(target.index())
+            if self.tree_view.selectionModel():
+                self.tree_view.selectionModel().select(
+                    target.index(),
+                    QItemSelectionModel.SelectionFlag.ClearAndSelect | QItemSelectionModel.SelectionFlag.Rows,
+                )
             self.tree_view.blockSignals(False)
 
     def _handle_s3_data_loaded(self, folders: List[S3FolderItem], files: List[S3FileItem]) -> None:
         self.table_model.set_items(folders, files)
+        if self.table_view.selectionModel():
+            self.table_view.selectionModel().clearSelection()
+        self.table_view.scrollToTop()
+        self.table_view.viewport().update()
         self.status_message.emit(f"Loaded {len(folders)} folders, {len(files)} files in s3://{self.current_bucket}/{self.current_prefix}")
 
     def _handle_buckets_loaded(self, buckets: List[S3BucketItem]) -> None:
         self.tree_model.populate_buckets(buckets)
         if self.edit_bucket_filter.text().strip():
             self._apply_bucket_filter()
-        if buckets and not self.current_bucket:
+        if self._pending_navigation:
+            target_bucket, target_prefix = self._pending_navigation
+            self._pending_navigation = None
+            self.navigate_to(target_bucket, target_prefix)
+        elif self.current_bucket:
+            self._sync_tree_selection(self.current_bucket, self.current_prefix)
+        elif buckets:
             self.navigate_to(buckets[0].name, "")
 
     def _apply_bucket_filter(self) -> None:
