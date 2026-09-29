@@ -470,9 +470,6 @@ class MainWindow(QMainWindow):
             try:
                 buckets = self.s3_client.list_buckets()
                 self.buckets_loaded.emit(buckets)
-                if buckets and not self.current_bucket:
-                    # Automatically select first bucket
-                    self.navigate_to(buckets[0].name, "")
             except Exception as e:
                 self.status_message.emit(f"Failed to list buckets: {e}")
 
@@ -575,6 +572,8 @@ class MainWindow(QMainWindow):
         self.tree_model.populate_buckets(buckets)
         if self.edit_bucket_filter.text().strip():
             self._apply_bucket_filter()
+        if buckets and not self.current_bucket:
+            self.navigate_to(buckets[0].name, "")
 
     def _apply_bucket_filter(self) -> None:
         query = self.edit_bucket_filter.text().strip().lower()

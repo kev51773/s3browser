@@ -34,14 +34,10 @@ class S3TableView(QTableView):
         self.setShowGrid(False)
         self.setAlternatingRowColors(True)
         self.verticalHeader().setVisible(False)
-        self.verticalHeader().setDefaultSectionSize(26)
+        self.verticalHeader().setDefaultSectionSize(28)
 
         # Header sizing
-        header = self.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.apply_header_sizing()
 
         # Rubberband selection support
         self._rubber_band: Optional[QRubberBand] = None
@@ -51,6 +47,22 @@ class S3TableView(QTableView):
         self.doubleClicked.connect(self._on_double_clicked)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
+
+    def setModel(self, model: Any) -> None:
+        super().setModel(model)
+        self.apply_header_sizing()
+
+    def apply_header_sizing(self) -> None:
+        header = self.horizontalHeader()
+        header.setMinimumSectionSize(60)
+        if header.count() >= 4:
+            header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+            header.setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+            header.setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+            header.resizeSection(1, 100)
+            header.resizeSection(2, 160)
+            header.resizeSection(3, 130)
 
     def get_selected_rows(self) -> List[S3RowItem]:
         """Returns list of selected S3RowItem objects."""
