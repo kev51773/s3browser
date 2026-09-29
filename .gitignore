@@ -1,0 +1,46 @@
+﻿# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Local application data and secrets (user profiles, tokens, bookmarks cache)
+.s3_browser/
+*.env
+*.log
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.spec
+
+# Testing and coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDE and Editor configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Agent / Tool scratch files
+.gemini/
+scratch/
